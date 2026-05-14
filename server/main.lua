@@ -118,44 +118,69 @@ end)
 
 -- ─── wm-serversirens Hilfsfunktion ────────────────────────────────────────────
 
--- Sendet den Sirenen-Befehl an wm-serversirens (mit Fehlerbehandlung)
-local function SetWMSiren(vehicle, toneIndex, active)
+-- Sendet den Sirenen-Befehl an wm-serversirens.
+-- Probiert mehrere API-Signaturen der verschiedenen wm-serversirens Versionen.
+-- netId    = Netzwerk-ID des Fahrzeugs (bevorzugt, da die meisten Versionen dies erwarten)
+-- vehicle  = Server-seitiger Entity-Handle (Fallback fuer aeltere Versionen)
+-- toneIndex = Ton-Index 1-4 (0 = aus)
+-- active   = boolean
+local function SetWMSiren(netId, vehicle, toneIndex, active)
     if not Config.WMSirens.enabled then return end
-    if GetResourceState(Config.WMSirens.resource) ~= 'started' then
+    local res = Config.WMSirens.resource
+    if GetResourceState(res) ~= 'started' then
         if Config.Debug then
             print('[gc_els] wm-serversirens nicht gestartet, ueberspringe.')
         end
         return
     end
 
-    -- wm-serversirens API (pcall fuer Fehlertoleranz falls API sich aendert)
-    local ok, err = pcall(function()
+    -- Versuche 1: SetVehicleSiren(netId, state, tone) – moderne Versionen mit Ton-Control
+    local ok = pcall(function()
         if active and toneIndex > 0 then
-            -- Sirene aktivieren mit Ton-Index
-            -- wm-serversirens erwartet: vehicle (entity), tone (number)
-            exports[Config.WMSirens.resource]:SetSirenTone(vehicle, toneIndex)
+            exports[res]:SetVehicleSiren(netId, true, toneIndex)
         else
-            -- Sirene deaktivieren (Ton 0 = aus)
-            exports[Config.WMSirens.resource]:SetSirenTone(vehicle, 0)
+            exports[res]:SetVehicleSiren(netId, false, 0)
+        end
+    end)
+    if ok then return end
+
+    -- Versuche 2: SetSirenTone(netId, tone) – alternativ mit netId
+    ok = pcall(function()
+        if active and toneIndex > 0 then
+            exports[res]:SetSirenTone(netId, toneIndex)
+        else
+            exports[res]:SetSirenTone(netId, 0)
+        end
+    end)
+    if ok then return end
+
+    -- Versuche 3: SetVehicleSiren(vehicle, state) – WolfKnight-Original mit Entity-Handle
+    ok = pcall(function()
+        exports[res]:SetVehicleSiren(vehicle, active)
+    end)
+    if ok then return end
+
+    -- Versuche 4: SetSirenTone(vehicle, tone) – aeltere Versionen mit Entity-Handle
+    ok = pcall(function()
+        if active and toneIndex > 0 then
+            exports[res]:SetSirenTone(vehicle, toneIndex)
+        else
+            exports[res]:SetSirenTone(vehicle, 0)
+        end
+    end)
+    if ok then return end
+
+    -- Fallback: Client-Event (alle Clients informieren, die den Sound abspielen koennen)
+    pcall(function()
+        if active and toneIndex > 0 then
+            TriggerClientEvent(res .. ':playServerSiren', -1, netId, toneIndex)
+        else
+            TriggerClientEvent(res .. ':stopServerSiren', -1, netId)
         end
     end)
 
-    if not ok then
-        -- Fallback: Versuche alternativen Event-Namen (verschiedene wm-serversirens Versionen)
-        local ok2, err2 = pcall(function()
-            if active then
-                TriggerEvent(Config.WMSirens.resource .. ':setTone', vehicle, toneIndex)
-            else
-                TriggerEvent(Config.WMSirens.resource .. ':stopSiren', vehicle)
-            end
-        end)
-
-        if Config.Debug then
-            if not ok2 then
-                print('[gc_els] wm-serversirens Fehler: ' .. tostring(err))
-                print('[gc_els] wm-serversirens Fallback Fehler: ' .. tostring(err2))
-            end
-        end
+    if Config.Debug then
+        print('[gc_els] wm-serversirens: alle API-Versuche abgeschlossen (kein Fehler = OK)')
     end
 end
 
@@ -195,9 +220,9 @@ AddEventHandler('gc_els:setSiren', function(netId, toneIndex, active)
         active    = false
     end
 
-    -- wm-serversirens steuern
+    -- wm-serversirens steuern (netId bevorzugt, vehicle als Fallback)
     if DoesEntityExist(vehicle) then
-        SetWMSiren(vehicle, toneIndex, active)
+        SetWMSiren(netId, vehicle, toneIndex, active)
     end
 
     -- An alle Clients weiterleiten (fuer Licht-Sync ohne wm-serversirens)

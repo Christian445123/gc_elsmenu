@@ -30,42 +30,90 @@ local function ParseExtras(str)
     return result
 end
 
--- Parst den Inhalt einer VCF-XML-Datei, gibt Config-Table oder nil zurueck
-local function ParseVehicleXML(content)
-    if not content then return nil end
+-- Parst Standard-ELS-VCF-Format (EOVERRIDE-Sektion mit IsElsControlled + OffsetX)
+-- Extras mit OffsetX < 0  → Gruppe A (links/vorne)
+-- Extras mit OffsetX >= 0 → Gruppe B (rechts/hinten)
+-- Extras ohne OffsetX aber IsElsControlled="true" → Gruppe A (Fallback)
+local function ParseELSVCFFormat(content, modelName)
+    local gA = {}
+    local gB = {}
 
-    local modelName = content:match('<modelName%s+value="([^"]+)"')
-    if not modelName then return nil end
-
-    local gA = ParseExtras(content:match('<groupA%s+extras="([^"]+)"'))
-    local gB = ParseExtras(content:match('<groupB%s+extras="([^"]+)"'))
+    for line in content:gmatch('[^\r\n]+') do
+        local extraNum = line:match('<Extra(%d+)%s')
+        if extraNum and line:find('IsElsControlled="true"') then
+            local num     = tonumber(extraNum)
+            local offsetX = tonumber(line:match('OffsetX="([^"]+)"'))
+            if num then
+                if offsetX and offsetX > 0 then
+                    gB[#gB + 1] = num
+                else
+                    -- Negative OffsetX (links), OffsetX=0 (Mitte) oder kein Offset → Gruppe A
+                    gA[#gA + 1] = num
+                end
+            end
+        end
+    end
 
     if #gA == 0 and #gB == 0 then return nil end
-
     return { modelName = modelName, groupA = gA, groupB = gB }
+end
+
+-- Parst den Inhalt einer VCF-XML-Datei.
+-- Unterstuetzt beide Formate:
+--   1. GC ELS Format   (<metadata><modelName> + <lightingGroup><groupA extras="...">)
+--   2. Standard ELS VCF (<EOVERRIDE> mit IsElsControlled="true" und OffsetX)
+local function ParseVehicleXML(content, modelName)
+    if not content then return nil end
+
+    -- ── Format 1: GC ELS Einfach-Format ─────────────────────────────────────
+    local gcModel = content:match('<modelName%s+value="([^"]+)"')
+    if gcModel then
+        local gA = ParseExtras(content:match('<groupA%s+extras="([^"]+)"'))
+        local gB = ParseExtras(content:match('<groupB%s+extras="([^"]+)"'))
+        if #gA > 0 or #gB > 0 then
+            return { modelName = gcModel, groupA = gA, groupB = gB }
+        end
+    end
+
+    -- ── Format 2: Standard ELS VCF (EOVERRIDE) ───────────────────────────────
+    if content:find('<EOVERRIDE') then
+        return ParseELSVCFFormat(content, modelName)
+    end
+
+    return nil
 end
 
 -- Laedt alle VCF-Configs beim Ressourcenstart (aus Config.VCFModels)
 local function LoadAllVCFConfigs()
     local resName = GetCurrentResourceName()
+    local loaded  = 0
+    local failed  = 0
+
     for _, modelName in ipairs(Config.VCFModels or {}) do
         local path    = 'vcf/' .. modelName .. '.xml'
         local content = LoadResourceFile(resName, path)
         if content then
-            local cfg = ParseVehicleXML(content)
+            local cfg = ParseVehicleXML(content, modelName)
             if cfg then
                 vcfCache[GetHashKey(modelName)] = cfg
+                loaded = loaded + 1
                 if Config.Debug then
-                    print(string.format('[gc_els] VCF geladen: %s | A: %d Extras | B: %d Extras',
+                    print(string.format('[gc_els] VCF geladen: %s | A: %d | B: %d',
                         modelName, #cfg.groupA, #cfg.groupB))
                 end
             else
+                failed = failed + 1
                 print('[gc_els] VCF Parse-Fehler: ' .. path)
             end
         else
-            print('[gc_els] VCF nicht gefunden: ' .. path)
+            failed = failed + 1
+            if Config.Debug then
+                print('[gc_els] VCF nicht gefunden: ' .. path)
+            end
         end
     end
+
+    print(string.format('[gc_els] VCF-Configs: %d geladen, %d fehlgeschlagen', loaded, failed))
 end
 
 Citizen.CreateThread(function()
