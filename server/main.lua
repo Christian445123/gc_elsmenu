@@ -11,16 +11,43 @@
 
 local RESOURCE_VERSION = GetResourceMetadata(GetCurrentResourceName(), 'version', 0) or 'unknown'
 
+-- ─── Startbanner ──────────────────────────────────────────────────────────────
+AddEventHandler('onResourceStart', function(resourceName)
+    if GetCurrentResourceName() ~= resourceName then return end
+    local R = '^7'
+    local T = '^1'
+    local D = '^8'
+    local G = '^2'
+    local W = '^7'
+    print(R)
+    print(T .. '   ____   ____   _____ _     ____  __  __ _____ _   _ _   _ ' .. R)
+    print(T .. '  / ___| / ___| | ____| |   / ___||  \\/  | ____| \\ | | | | |' .. R)
+    print(W .. ' | |  _ | |     |  _| | |   \\___ \\| |\\/| |  _| |  \\| | | | |' .. R)
+    print(W .. ' | |_| || |___  | |___| |___ ___) | |  | | |___| |\\  | |_| |' .. R)
+    print(T .. '  \\____| \\____| |_____|_____|____/|_|  |_|_____|_| \\_|\\___/ ' .. R)
+    print(R)
+    print(D .. ' ##########################################################################' .. R)
+    print(D .. ' ##                                                                      ##' .. R)
+    print(D .. ' ##  ^7ELS Menu                            by GamingDevelopment    ##' .. R)
+    print(D .. ' ##  ^7Version  ' .. G .. RESOURCE_VERSION .. D .. '                                              ##' .. R)
+    print(D .. ' ##                                                                      ##' .. R)
+    print(D .. ' ##########################################################################' .. R)
+    print(R)
+end)
+
 -- ─── Lizenz-Prüfung ───────────────────────────────────────────────────────────
 
 local licenseValid = false
 
 local function stopResourceWithError(reason)
     print('^1')
-    print('^1  ################################################################')
-    print('^1  ##  LIZENZ-FEHLER: ' .. tostring(reason))
-    print('^1  ##  Die Resource wird gestoppt.')
-    print('^1  ################################################################^7')
+    print('^1 ##########################################################################')
+    print('^1 ##                                                                      ##')
+    print('^1 ##  LIZENZ-FEHLER: gc_elsmenu                                          ##')
+    print('^1 ##  ' .. tostring(reason))
+    print('^1 ##                                                                      ##')
+    print('^1 ##  Die Resource wird gestoppt. Bitte Lizenzkey prüfen.                ##')
+    print('^1 ##########################################################################^7')
     StopResource(GetCurrentResourceName())
 end
 
