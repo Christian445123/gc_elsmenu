@@ -1,520 +1,133 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="UTF-8">
 <title>GC ELS</title>
 <style>
-/* ─── Reset & Root ─────────────────────────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
 :root {
-    --bg:          #080810;
-    --surface:     #0e0e1c;
-    --surface2:    #131325;
-    --border:      #1c1c34;
-    --border-mid:  #252540;
-
-    --blue:        #2266ff;
-    --blue-glow:   rgba(34,102,255,0.25);
-    --blue-dim:    rgba(34,102,255,0.10);
-    --blue-mid:    rgba(34,102,255,0.18);
-
-    --red:         #ff2244;
-    --red-glow:    rgba(255,34,68,0.25);
-    --red-dim:     rgba(255,34,68,0.10);
-
-    --amber:       #ffaa00;
-    --amber-glow:  rgba(255,170,0,0.25);
-    --amber-dim:   rgba(255,170,0,0.10);
-
-    --green:       #22cc66;
-    --green-dim:   rgba(34,204,102,0.12);
-
-    --text:        #c0c0d8;
-    --text-mid:    #7070a0;
-    --text-dim:    #404060;
-
-    --btn:         #10101e;
-    --btn-hover:   #181830;
-
-    --row-h:       34px;
-    --radius:      3px;
-    --font:        'Courier New', 'Lucida Console', monospace;
+    --base:      #d8d8d8;
+    --active:    #3691fe;
+    --active-bg: rgba(54,145,254,0.14);
+    --warn:      #ffaa00;
+    --warn-bg:   rgba(255,170,0,0.12);
+    --btn-bg:    #424242;
+    --br:        4px;
+    --font:      "Courier New", Courier, monospace;
 }
-
-body {
-    background: transparent;
-    overflow: hidden;
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
-    padding: 22px;
-    font-family: var(--font);
-    user-select: none;
-}
-
-/* ─── Panel ────────────────────────────────────────────────────────────────── */
-#panel {
-    display: none;          /* Lua sendet 'show' um es anzuzeigen */
-    flex-direction: column;
-    width: 270px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    box-shadow:
-        0 0 0 1px rgba(255,255,255,0.03) inset,
-        0  4px 20px rgba(0,0,0,0.7),
-        0 12px 40px rgba(0,0,20,0.5);
-    pointer-events: none;   /* Standard: kein Maus-Input (nur Tastatur via Lua) */
-}
-#panel.interact {
-    pointer-events: auto;   /* Interact-Modus: Maus aktiv */
-}
-
-/* ─── Header ───────────────────────────────────────────────────────────────── */
-.hdr {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 10px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.hdr-dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--text-dim);
-    flex-shrink: 0;
-    transition: background 0.3s;
-}
-.hdr-dot.on {
-    background: var(--blue);
-    box-shadow: 0 0 6px var(--blue), 0 0 12px var(--blue-glow);
-    animation: pulse-dot 1.2s ease-in-out infinite;
-}
-@keyframes pulse-dot {
-    0%,100% { opacity:1; }
-    50%      { opacity:0.4; }
-}
-.hdr-title {
-    flex: 1;
-    font-size: 11px;
-    font-weight: bold;
-    letter-spacing: 3px;
-    color: var(--text);
-}
-.hdr-badge {
-    font-size: 9px;
-    letter-spacing: 1px;
-    color: var(--text-dim);
-    background: var(--border);
-    padding: 2px 6px;
-    border-radius: 2px;
-    border: 1px solid transparent;
-    transition: all 0.3s;
-}
-.hdr-badge.on {
-    color: var(--blue);
-    background: var(--blue-dim);
-    border-color: rgba(34,102,255,0.3);
-}
-.hdr-esc {
-    font-size: 9px;
-    color: var(--text-dim);
-    border: 1px solid var(--border-mid);
-    padding: 2px 5px;
-    border-radius: 2px;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: none;
-}
-.hdr-esc:hover { color: var(--text); border-color: var(--text-mid); }
-.interact .hdr-esc { display: block; }
-
-/* ─── Section ──────────────────────────────────────────────────────────────── */
-.sec {
-    border-bottom: 1px solid var(--border);
-    padding: 8px 10px;
-}
-.sec-lbl {
-    font-size: 8px;
-    letter-spacing: 2.5px;
-    color: var(--text-dim);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-}
-
-/* ─── Buttons ──────────────────────────────────────────────────────────────── */
-.btn-row { display: flex; gap: 5px; }
-
-.btn {
-    flex: 1;
-    height: var(--row-h);
-    background: var(--btn);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius);
-    color: var(--text-dim);
-    font-family: var(--font);
-    font-size: 9px;
-    font-weight: bold;
-    letter-spacing: 1px;
-    cursor: pointer;
-    text-align: center;
-    line-height: 1;
-    transition: background 0.1s, border-color 0.1s, color 0.1s, box-shadow 0.1s;
-}
-.btn:hover { background: var(--btn-hover); color: var(--text); border-color: var(--text-dim); }
-
-.btn.blue  {
-    background: var(--blue-mid);  border-color: var(--blue);
-    color: var(--blue);
-    box-shadow: 0 0 8px var(--blue-glow);
-}
-.btn.red   {
-    background: var(--red-dim);   border-color: var(--red);
-    color: var(--red);
-    box-shadow: 0 0 8px var(--red-glow);
-}
-.btn.amber {
-    background: var(--amber-dim); border-color: var(--amber);
-    color: var(--amber);
-    box-shadow: 0 0 8px var(--amber-glow);
-    animation: amber-pulse 1s ease-in-out infinite;
-}
-@keyframes amber-pulse {
-    0%,100% { box-shadow: 0 0 8px var(--amber-glow); }
-    50%      { box-shadow: 0 0 16px rgba(255,170,0,0.4); }
-}
-.btn.green  {
-    background: var(--green-dim); border-color: var(--green);
-    color: var(--green);
-}
-.btn-full { width: 100%; height: var(--row-h); }
-
-/* ─── Stage-Buttons: LED-Streifen oben ────────────────────────────────────── */
-.btn-stage {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding-top: 4px;
-}
-.stage-led {
-    width: 100%; height: 3px;
-    border-radius: 2px;
-    background: var(--border-mid);
-    transition: background 0.2s, box-shadow 0.2s;
-}
-.btn.blue  .stage-led { background: var(--blue);  box-shadow: 0 0 6px var(--blue-glow); }
-.btn.red   .stage-led { background: var(--red);   box-shadow: 0 0 6px var(--red-glow);  }
-.btn.green .stage-led { background: var(--green); }
-.stage-label { font-size: 9px; }
-
-/* ─── Pattern-Selector ─────────────────────────────────────────────────────── */
-.pat-row { display: flex; align-items: center; gap: 5px; }
-.pat-arrow {
-    flex: 0 0 28px; height: var(--row-h);
-    font-size: 13px;
-}
-.pat-name {
-    flex: 1; height: var(--row-h);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; letter-spacing: 1px;
-    background: var(--surface2);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--radius);
-    color: var(--text-mid);
-    transition: all 0.2s;
-}
-.pat-name.on {
-    color: var(--blue);
-    background: var(--blue-dim);
-    border-color: rgba(34,102,255,0.25);
-}
-.pat-counter {
-    font-size: 8px;
-    color: var(--text-dim);
-    margin-top: 4px;
-    text-align: center;
-}
-
-/* ─── Tone Buttons ─────────────────────────────────────────────────────────── */
-#tone-row { display: flex; gap: 5px; flex-wrap: wrap; }
-#tone-row .btn { flex: 1 1 auto; min-width: 48px; }
-
-/* ─── Warning ──────────────────────────────────────────────────────────────── */
-.warn-row { display: flex; gap: 5px; align-items: center; }
-.warn-icon { font-size: 13px; }
-
-/* ─── Siren Stage Indicators ───────────────────────────────────────────────── */
-.siren-row {
-    display: flex;
-    gap: 3px;
-    margin-top: 5px;
-}
-.siren-dot {
-    flex: 1; height: 4px;
-    border-radius: 2px;
-    background: var(--border-mid);
-    transition: background 0.15s, box-shadow 0.15s;
-}
-.siren-dot.on.blue  { background: var(--blue);  box-shadow: 0 0 5px var(--blue-glow);  }
-.siren-dot.on.red   { background: var(--red);   box-shadow: 0 0 5px var(--red-glow);   }
-.siren-dot.on.amber { background: var(--amber); box-shadow: 0 0 5px var(--amber-glow); }
-
-/* ─── Footer ───────────────────────────────────────────────────────────────── */
-.ftr {
-    padding: 6px 10px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-.ftr-info { font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
-.ftr-key  {
-    font-size: 9px; color: var(--text-dim);
-    transition: opacity 0.2s;
-}
-.ftr-key kbd {
-    background: var(--border-mid);
-    border: 1px solid var(--border);
-    padding: 1px 4px;
-    border-radius: 2px;
-    font-family: var(--font);
-    font-size: 9px;
-}
-.interact .ftr-key { opacity: 0; }
-
-/* ─── Divider ──────────────────────────────────────────────────────────────── */
-.divider {
-    height: 1px;
-    background: linear-gradient(to right, transparent, var(--border-mid), transparent);
-    margin: 0 10px;
-}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:transparent;overflow:hidden;width:100vw;height:100vh;font-family:var(--font);user-select:none}
+#panel{display:none;position:absolute;bottom:5%;right:5%;background:rgba(0,0,0,0.92);border:1px solid #353535;border-radius:6px;padding:10px;width:24vw;min-width:260px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.85);pointer-events:none}
+#panel.interact{pointer-events:auto}
+.hdr{display:flex;align-items:center;gap:7px;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid #282828}
+.hdr-dot{width:8px;height:8px;border-radius:50%;background:#555;flex-shrink:0;transition:background 0.3s,box-shadow 0.3s}
+.hdr-dot.on{background:var(--active);box-shadow:0 0 6px var(--active)}
+.hdr-title{flex:1;font-size:10px;font-weight:bold;letter-spacing:3px;color:#ccc;text-transform:uppercase}
+.hdr-badge{font-size:8px;letter-spacing:1px;color:#666}
+.hdr-esc{font-size:8px;color:#888;border:1px solid #555;padding:2px 5px;border-radius:2px;cursor:pointer;display:none}
+.interact .hdr-esc{display:block}
+.btn-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:5px}
+.btn{height:56px;background:var(--btn-bg);border:2px solid var(--base);border-radius:var(--br);color:var(--base);font-family:var(--font);font-size:7.5px;font-weight:bold;letter-spacing:0.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-transform:uppercase;transition:border-color 0.12s,color 0.12s,background 0.12s}
+.btn:hover{background:#525252}
+.btn.active{border-color:var(--active);color:var(--active);background:var(--active-bg)}
+.btn.off-sel{border-color:#888;color:#bbb;background:#3c3c3c}
+.btn.warn-on{border-color:var(--warn);color:var(--warn);background:var(--warn-bg);animation:warnblink 0.5s ease-in-out infinite}
+@keyframes warnblink{0%,100%{background:var(--warn-bg)}50%{background:rgba(255,170,0,0.28)}}
+.btn-icon{font-size:14px;line-height:1}
+.btn-lbl{font-size:7px;letter-spacing:0.5px}
+.pat-row{display:grid;grid-template-columns:30px 1fr 30px;gap:5px;margin-bottom:3px}
+.pat-arrow{height:30px;background:var(--btn-bg);border:2px solid var(--base);border-radius:var(--br);color:var(--base);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s}
+.pat-arrow:hover{background:#525252}
+.pat-name{height:30px;background:#1c1c1c;border:2px solid #3a3a3a;border-radius:var(--br);color:#888;font-size:8px;letter-spacing:1px;display:flex;align-items:center;justify-content:center;font-family:var(--font);text-transform:uppercase;transition:border-color 0.15s,color 0.15s,background 0.15s}
+.pat-name.on{color:var(--active);border-color:var(--active);background:var(--active-bg)}
+.pat-ctr{font-size:7px;color:#444;text-align:center;margin-bottom:5px;letter-spacing:0.5px}
+.tone-row{display:flex;gap:5px;margin-bottom:5px}
+.tone-btn{flex:1;height:26px;background:var(--btn-bg);border:2px solid var(--base);border-radius:var(--br);color:var(--base);font-family:var(--font);font-size:7px;font-weight:bold;letter-spacing:0.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;text-transform:uppercase;transition:border-color 0.12s,color 0.12s,background 0.12s}
+.tone-btn:hover{background:#525252}
+.tone-btn.active{border-color:var(--active);color:var(--active);background:var(--active-bg)}
+.ftr{display:flex;align-items:center;justify-content:space-between;padding-top:7px;border-top:1px solid #282828}
+.ftr-info{font-size:7.5px;color:#555;letter-spacing:0.5px}
+.ftr-key{font-size:7.5px;color:#555}
+.ftr-key kbd{background:#2a2a2a;border:1px solid #444;padding:1px 3px;border-radius:2px;font-family:var(--font);font-size:7.5px}
+.interact .ftr-key{display:none}
 </style>
 </head>
 <body>
 <div id="panel">
-
-    <!-- ── Header ─────────────────────────────────────────────────────────── -->
-    <div class="hdr">
-        <div class="hdr-dot" id="hdr-dot"></div>
-        <div class="hdr-title">GC&nbsp;ELS</div>
-        <div class="hdr-badge" id="hdr-badge">INAKTIV</div>
-        <div class="hdr-esc" onclick="closeInteract()">ESC</div>
-    </div>
-
-    <!-- ── Stage ──────────────────────────────────────────────────────────── -->
-    <div class="sec">
-        <div class="sec-lbl">Stage</div>
-        <div class="btn-row">
-            <button class="btn btn-stage" id="btn-s0" onclick="setStage(0)">
-                <div class="stage-led"></div>
-                <span class="stage-label">AUS</span>
-            </button>
-            <button class="btn btn-stage" id="btn-s1" onclick="setStage(1)">
-                <div class="stage-led"></div>
-                <span class="stage-label">LICHTER</span>
-            </button>
-            <button class="btn btn-stage" id="btn-s2" onclick="setStage(2)">
-                <div class="stage-led"></div>
-                <span class="stage-label">SIRENE</span>
-            </button>
-        </div>
-        <!-- Aktivitäts-Balken für Licht-Stage -->
-        <div class="siren-row" id="siren-row"></div>
-    </div>
-
-    <!-- ── Lichtmuster ────────────────────────────────────────────────────── -->
-    <div class="sec">
-        <div class="sec-lbl">Lichtmuster</div>
-        <div class="pat-row">
-            <button class="btn pat-arrow" onclick="prevPattern()">◀</button>
-            <div class="pat-name" id="pat-name">–</div>
-            <button class="btn pat-arrow" onclick="nextPattern()">▶</button>
-        </div>
-        <div class="pat-counter" id="pat-counter"></div>
-    </div>
-
-    <!-- ── Sirenentonart ──────────────────────────────────────────────────── -->
-    <div class="sec">
-        <div class="sec-lbl">Sirenentonart</div>
-        <div id="tone-row"><!-- via JS befüllt --></div>
-    </div>
-
-    <!-- ── Warnlichter ────────────────────────────────────────────────────── -->
-    <div class="sec">
-        <div class="sec-lbl">Warnlichter</div>
-        <div class="warn-row">
-            <button class="btn btn-full" id="btn-warn" onclick="toggleWarning()">
-                ⚠&nbsp;&nbsp;WARNLICHTER&nbsp;&nbsp;⚠
-            </button>
-        </div>
-    </div>
-
-    <!-- ── Footer ─────────────────────────────────────────────────────────── -->
-    <div class="ftr">
-        <div class="ftr-info" id="ftr-info">Kein ELS-Fahrzeug</div>
-        <div class="ftr-key"><kbd>P</kbd> Interagieren</div>
-    </div>
-
-</div><!-- #panel -->
-
+<div class="hdr">
+<div class="hdr-dot" id="hdr-dot"></div>
+<div class="hdr-title">GC &nbsp; ELS</div>
+<div class="hdr-badge" id="hdr-badge">INAKTIV</div>
+<div class="hdr-esc" onclick="closeInteract()">ESC</div>
+</div>
+<div class="btn-grid">
+<button class="btn" id="btn-s0" onclick="setStage(0)"><span class="btn-icon">&#9711;</span><span class="btn-lbl">AUS</span></button>
+<button class="btn" id="btn-s1" onclick="setStage(1)"><span class="btn-icon">&#10022;</span><span class="btn-lbl">LICHTER</span></button>
+<button class="btn" id="btn-s2" onclick="setStage(2)"><span class="btn-icon">&#8776;</span><span class="btn-lbl">SIRENE</span></button>
+<button class="btn" id="btn-warn" onclick="toggleWarning()"><span class="btn-icon">&#9651;</span><span class="btn-lbl">WARNUNG</span></button>
+</div>
+<div class="pat-row">
+<button class="pat-arrow" onclick="prevPattern()">&#9664;</button>
+<div class="pat-name" id="pat-name">&#8211;</div>
+<button class="pat-arrow" onclick="nextPattern()">&#9654;</button>
+</div>
+<div class="pat-ctr" id="pat-ctr"></div>
+<div class="tone-row" id="tone-row"></div>
+<div class="ftr">
+<div class="ftr-info" id="ftr-info">Kein ELS-Fahrzeug aktiv</div>
+<div class="ftr-key"><kbd>P</kbd>&nbsp;Interagieren</div>
+</div>
+</div>
 <script>
-'use strict';
-
-/* ─── Zustand ────────────────────────────────────────────────────────────────*/
-const S = {
-    active:       false,
-    stage:        0,
-    pattern:      1,
-    patternName:  '–',
-    patternCount: 1,
-    tone:         1,
-    warning:      false,
-    extrasCount:  0,
-    vehicleClass: 18,
-    tones:        [],
-    interacting:  false,
-};
-
-/* ─── Elemente ───────────────────────────────────────────────────────────────*/
-const panel   = document.getElementById('panel');
-const dot     = document.getElementById('hdr-dot');
-const badge   = document.getElementById('hdr-badge');
-const patName = document.getElementById('pat-name');
-const patCtr  = document.getElementById('pat-counter');
-const toneRow = document.getElementById('tone-row');
-const warnBtn = document.getElementById('btn-warn');
-const ftrInfo = document.getElementById('ftr-info');
-const sirenRow= document.getElementById('siren-row');
-
-/* ─── NUI → Lua ──────────────────────────────────────────────────────────────*/
-function luaCall(endpoint, data) {
-    fetch(`https://gc_els/${endpoint}`, {
-        method:  'POST',
-        headers: {'Content-Type': 'application/json'},
-        body:    JSON.stringify(data || {})
-    });
+"use strict";
+var S={active:false,stage:0,pattern:1,patternName:"-",patternCount:1,tone:1,warning:false,extrasCount:0,vehicleClass:18,tones:[],interacting:false};
+var panel=document.getElementById("panel");
+var dot=document.getElementById("hdr-dot");
+var badge=document.getElementById("hdr-badge");
+var patName=document.getElementById("pat-name");
+var patCtr=document.getElementById("pat-ctr");
+var toneRow=document.getElementById("tone-row");
+var ftrInfo=document.getElementById("ftr-info");
+function luaCall(ep,data){fetch("https://gc_elsmenu/"+ep,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data||{})});}
+function setStage(s){luaCall("nuiSetStage",{stage:s});}
+function setTone(t){luaCall("nuiSetTone",{tone:t});}
+function nextPattern(){luaCall("nuiNextPattern",{});}
+function prevPattern(){luaCall("nuiPrevPattern",{});}
+function toggleWarning(){luaCall("nuiToggleWarning",{});}
+function closeInteract(){luaCall("nuiClose",{});}
+function renderUI(){
+var a=S.active,lit=a&&S.stage>0;
+dot.className="hdr-dot"+(lit?" on":"");
+badge.textContent=a?"KL. "+S.vehicleClass:"INAKTIV";
+document.getElementById("btn-s0").className="btn"+(S.stage===0?" off-sel":"");
+document.getElementById("btn-s1").className="btn"+(a&&S.stage===1?" active":"");
+document.getElementById("btn-s2").className="btn"+(a&&S.stage===2?" active":"");
+document.getElementById("btn-warn").className="btn"+(S.warning?" warn-on":"");
+patName.textContent=a?S.patternName:"\u2013";
+patName.className="pat-name"+(lit?" on":"");
+patCtr.textContent=a?(S.pattern+" / "+S.patternCount):"";
+toneRow.querySelectorAll(".tone-btn").forEach(function(b,i){b.className="tone-btn"+(S.tone===i+1&&S.stage>=2?" active":"");});
+ftrInfo.textContent=a?(S.extrasCount+" Extras \u00b7 KL "+S.vehicleClass):"Kein ELS-Fahrzeug aktiv";
 }
-
-function setStage(s)      { luaCall('nuiSetStage',      {stage:  s}); }
-function setTone(t)       { luaCall('nuiSetTone',       {tone:   t}); }
-function nextPattern()    { luaCall('nuiNextPattern',   {}); }
-function prevPattern()    { luaCall('nuiPrevPattern',   {}); }
-function toggleWarning()  { luaCall('nuiToggleWarning', {}); }
-function closeInteract()  { luaCall('nuiClose',         {}); }
-
-/* ─── UI rendern ─────────────────────────────────────────────────────────────*/
-function setClass(el, ...classes) {
-    el.className = classes.filter(Boolean).join(' ');
-}
-
-function renderUI() {
-    const a = S.active;
-    const lit = a && S.stage > 0;
-
-    /* Header */
-    dot.className   = 'hdr-dot' + (lit ? ' on' : '');
-    badge.textContent = a ? `KL. ${S.vehicleClass}` : 'INAKTIV';
-    badge.className   = 'hdr-badge' + (a ? ' on' : '');
-
-    /* Stage Buttons */
-    setClass(document.getElementById('btn-s0'), 'btn', 'btn-stage', S.stage===0 && a ? 'green' : '');
-    setClass(document.getElementById('btn-s1'), 'btn', 'btn-stage', S.stage===1        ? 'blue'  : '');
-    setClass(document.getElementById('btn-s2'), 'btn', 'btn-stage', S.stage===2        ? 'red'   : '');
-
-    /* Siren Dots (eine pro aktivem Ton-Schritt - zeigt Intensität) */
-    const dotCount = 8;
-    sirenRow.innerHTML = '';
-    for (let i = 0; i < dotCount; i++) {
-        const d = document.createElement('div');
-        d.className = 'siren-dot';
-        if (lit) {
-            const ratio = i / dotCount;
-            if (S.stage === 2 && ratio < 1)   { d.classList.add('on', 'red');   }
-            else if (S.stage === 1 && ratio < 1) { d.classList.add('on', 'blue'); }
-        }
-        if (S.warning && i < dotCount) d.classList.add('on', 'amber');
-        sirenRow.appendChild(d);
-    }
-
-    /* Pattern */
-    patName.textContent = a ? S.patternName : '–';
-    setClass(patName, 'pat-name', lit ? 'on' : '');
-    patCtr.textContent  = a ? `${S.pattern} / ${S.patternCount}` : '';
-
-    /* Tone Buttons */
-    toneRow.querySelectorAll('.btn').forEach((btn, i) => {
-        setClass(btn, 'btn', S.tone === (i+1) && S.stage >= 2 ? 'blue' : '');
-    });
-
-    /* Warning */
-    setClass(warnBtn, 'btn', 'btn-full', S.warning ? 'amber' : '');
-
-    /* Footer */
-    ftrInfo.textContent = a
-        ? `${S.extrasCount} Extras erkannt`
-        : 'Kein ELS-Fahrzeug aktiv';
-}
-
-/* Tone-Buttons beim ersten Mal aufbauen (oder bei Änderung) */
-function buildTones() {
-    toneRow.innerHTML = '';
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:5px;';
-    S.tones.forEach((t, i) => {
-        const btn = document.createElement('button');
-        btn.className   = 'btn';
-        btn.textContent = t.name;
-        btn.id          = `btn-t${i+1}`;
-        btn.onclick     = () => setTone(i + 1);
-        row.appendChild(btn);
-    });
-    toneRow.appendChild(row);
-}
-
-/* ─── Messages von Lua ───────────────────────────────────────────────────────*/
-window.addEventListener('message', ({data}) => {
-    switch (data.type) {
-
-        case 'show':
-            panel.style.display = 'flex';
-            break;
-
-        case 'hide':
-            panel.style.display = 'none';
-            panel.classList.remove('interact');
-            S.interacting = false;
-            break;
-
-        case 'init':
-            S.tones = data.tones || [];
-            buildTones();
-            break;
-
-        case 'update':
-            const hadTones = S.tones.length;
-            Object.assign(S, data);
-            if (!hadTones && S.tones.length) buildTones();
-            renderUI();
-            break;
-
-        case 'setInteract':
-            S.interacting = !!data.value;
-            panel.classList.toggle('interact', S.interacting);
-            break;
-    }
+function buildTones(){
+toneRow.innerHTML="";
+S.tones.forEach(function(t,i){
+var b=document.createElement("button");
+b.className="tone-btn";b.textContent=t.name;b.id="btn-t"+(i+1);
+b.onclick=(function(idx){return function(){setTone(idx);};})(i+1);
+toneRow.appendChild(b);
 });
-
-/* ESC-Taste im Browser schließt Interact-Modus */
-document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeInteract();
+}
+window.addEventListener("message",function(evt){
+var d=evt.data;
+switch(d.type){
+case"show":panel.style.display="block";break;
+case"hide":panel.style.display="none";panel.classList.remove("interact");S.interacting=false;break;
+case"init":S.tones=d.tones||[];buildTones();break;
+case"update":var h=S.tones.length;Object.assign(S,d);if(!h&&S.tones.length)buildTones();renderUI();break;
+case"setInteract":S.interacting=!!d.value;panel.classList.toggle("interact",S.interacting);break;
+}
 });
+document.addEventListener("keydown",function(e){if(e.key==="Escape")closeInteract();});
 </script>
 </body>
 </html>
