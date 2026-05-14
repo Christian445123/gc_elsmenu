@@ -34,4 +34,12 @@ files {
     'ui/index.html',
     'vcf/*.xml',
     'vcf/models.lua',
+    -- wm-serversirens Audio (integriert – keine externe Resource nötig)
+    'dlc_wmsirens/sirenpack_one.awc',
+    'data/wmsirens_sounds.dat54.nametable',
+    'data/wmsirens_sounds.dat54.rel',
 }
+
+-- Serverseitige Sirenen-Audio-Dateien (wm-serversirens, integriert)
+data_file 'AUDIO_WAVEPACK'   'dlc_wmsirens'
+data_file 'AUDIO_SOUNDDATA'  'data/wmsirens_sounds.dat'

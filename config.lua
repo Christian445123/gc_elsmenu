@@ -38,9 +38,11 @@ Config.AdditionalModels = {
 -- Config.VCFModels wird von vcf/models.lua gesetzt (wird nach config.lua geladen).
 
 -- ─── WM-SERVERSIRENS ──────────────────────────────────────────────────────────
+-- Die Sirenen-Audio-Dateien sind direkt in gc_elsmenu integriert (dlc_wmsirens/).
+-- Keine externe wm-serversirens Resource nötig!
+-- SetVehicleSiren(true) + SetVehicleHasMutedSirens(false) = Ton spielt automatisch.
 Config.WMSirens = {
-    enabled  = true,              -- wm-serversirens Unterstuetzung aktivieren
-    resource = 'wm-serversirens', -- Name des wm-serversirens Resources
+    enabled  = false,  -- Kein externer Export-Aufruf (Audio ist built-in)
 }
 
 -- ─── SIRENEN-TÖNE ─────────────────────────────────────────────────────────────
