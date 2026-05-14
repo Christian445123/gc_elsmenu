@@ -91,7 +91,7 @@ end
 local function GetVehicleNetId(vehicle)
     if not DoesEntityExist(vehicle) then return nil end
     local netId = NetworkGetNetworkIdFromEntity(vehicle)
-    if NetworkIsNetworkIdValid(netId) then
+    if NetworkDoesNetworkIdExist(netId) then
         return netId
     end
     return nil
