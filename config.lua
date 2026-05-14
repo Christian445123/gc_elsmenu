@@ -33,115 +33,9 @@ Config.AdditionalModels = {
 }
 
 -- ─── VCF-FAHRZEUGKONFIGURATION ────────────────────────────────────────────────
--- Fahrzeugmodelle mit eigener XML-Konfigurationsdatei (vcf/<modellname>.xml).
--- Der Dateiname (ohne .xml) muss hier eingetragen sein.
--- Unterstuetzt sowohl das GC ELS Format als auch das Standard ELS VCF Format (EOVERRIDE).
--- Fahrzeuge ohne Eintrag hier werden automatisch erkannt (Auto-Detection).
-Config.VCFModels = {
-    -- ── Polizei (LPD Wien) ───────────────────────────────────────────────
-    'police',
-    'lpd_octaviaw3',
-    'lpd_skodakodiaqw3',
-    'lpd_touranw3',
-    'lpd_touareg',
-    'lpd_tiguan',
-    'lpd_t6.1',
-    'lpd_vwt6_p9000',
-    'lpd_vwt6_w3',
-    'lpd_vwtouareg',
-    'lpd_vwtouranp9000',
-    'lpd_vwtouranp9000ea',
-    'lpd_vwtouranw3earlywarner',
-    'lpd_amarok',
-    'lpd_cupra',
-    'lpd_frosch',
-    'lpd_vuk',
-    'lpd_zivilskodakodiaq2024',
-    'skodakodiaqp9000',
-    'skodapol2',
-    'golf8unmarked',
-    'wolfvariant',
-    'survivor',
-    'wegasurvivor',
-    'wega2',
-    'wl_sharan',
-    'bh_streife',
-    -- ── Zivil / Observ ───────────────────────────────────────────────────
-    'a6zivil',
-    'audia4zivil',
-    's5zivi',
-    'lvaaudia6',
-    -- ── Rettungsdienst (RTW / NEF) ───────────────────────────────────────
-    'ambulance',
-    'rtwwienars',
-    'rtwwienasp',
-    'rtwwienbri',
-    'rtwwienfav',
-    'rtwwienflo',
-    'rtwwienher',
-    'rtwwienleo',
-    'rtwwienlsg',
-    'rtwwienmhf',
-    'rtwwienpzg',
-    'rtwwiensim',
-    's1nef',
-    'rebs1p2',
-    -- ── Bergrettung / SEG ─────────────────────────────────────────────────
-    'br_vito',
-    'br_evito',
-    'br_bit',
-    'br_caddy',
-    'br_kodiaq',
-    'br_kodiaqoberarzt',
-    'br_seg1',
-    'br_seg3',
-    'br_hoehenrettung',
-    'seg_sprinter',
-    'seg-10',
-    -- ── Feuerwehr ────────────────────────────────────────────────────────
-    'ffhlf1200',
-    'ffhlfneu4',
-    'ffhrf',
-    'ffkdf22',
-    'fflfa',
-    'tlf4k',
-    'MZF1',
-    'linghlfbt',
-    'linghlfbtn',
-    'bohlf',
-    'bf_klf',
-    't6_seiltechniker',
-    -- ── ÖAMTC / ÖAMDC ────────────────────────────────────────────────────
-    'oeamtc',
-    'oeamtc1',
-    'oeamtclala',
-    'oeamtclkw2',
-    'oeamtcpassat',
-    'oamtctiguan',
-    'oeamdc',
-    -- ── Berge / Wrecker ──────────────────────────────────────────────────
-    'c3wrecker',
-    'c3ramwrecker',
-    'scavareheavywrecker',
-    'tow2',
-    'flatbed3',
-    'gravelcargo',
-    'xm_atego_adac6f',
-    -- ── Sonstige Einsatzfahrzeuge ────────────────────────────────────────
-    '23xc90bs',
-    'atcaddy',
-    'att6',
-    'benefactorvan',
-    'brtwby',
-    'brtwby4x4',
-    'f750gs',
-    'joelrhodon',
-    'joeltouran',
-    'Kodiaq22EW',
-    'kodiaqw3',
-    'r1250',
-    'vwt5mtw',
-}
+-- Die Fahrzeugliste wird AUTOMATISCH aus vcf/models.lua geladen.
+-- Neue Fahrzeuge in vcf/models.lua eintragen, nicht hier.
+-- Config.VCFModels wird von vcf/models.lua gesetzt (wird nach config.lua geladen).
 
 -- ─── WM-SERVERSIRENS ──────────────────────────────────────────────────────────
 Config.WMSirens = {
@@ -235,15 +129,28 @@ Config.LightPatterns = {
 Config.WarningPattern = '111111000000111111000000'
 
 -- ─── UMGEBUNGS-CORONA-LICHT ───────────────────────────────────────────────────
--- Zeichnet ein blaues Licht-Corona rund um das Fahrzeug wenn ELS aktiv ist
+-- Zeichnet ein farbiges Licht-Corona rund ums Fahrzeug (Bodenreflexion, Umgebungsbeleuchtung).
+-- Laeuft in einem eigenen Frame-Thread → kein Flackern, saubere Trennung vom Blink-Pattern.
 Config.EnvLight = {
-    enabled    = true,
-    color      = { r = 0, g = 30, b = 255 }, -- Blau
-    range      = 18.0,
-    brightness = 3.0,
-    falloff    = 4.0,
-    -- Zusaetzlich rotes Corona auf der anderen Seite
-    altColor   = { r = 255, g = 0, b = 0 },
+    enabled         = true,
+
+    -- SYNCHRONISATION:
+    --   false (Standard) = Dauerlicht wenn ELS aktiv, kein Mitblinken → nur die Extras blinken
+    --   true             = Blinkt synchron mit dem Lichtmuster (Umgebung blinkt mit)
+    syncWithPattern = false,
+
+    -- REICHWEITE & HELLIGKEIT:
+    range           = 14.0,   -- Wie weit das Umgebungslicht reicht (in Metern)
+    brightness      = 2.0,    -- Helligkeit (1.0 = normal, 3.0 = sehr hell)
+    falloff         = 3.5,    -- Abfall mit Distanz (niedrig = sanft, hoch = scharf)
+
+    -- POSITION (relativ zum Fahrzeugmittelpunkt):
+    sideOffset      = 0.8,    -- Seitlicher Abstand vom Fahrzeug in Metern
+    heightOffset    = 1.0,    -- Hoehenversatz ueber dem Fahrzeugboden in Metern
+
+    -- FARBEN:
+    color           = { r = 0,   g = 20,  b = 255 },  -- Linke Seite  (Blau)
+    altColor        = { r = 255, g = 0,   b = 0   },  -- Rechte Seite (Rot)
 }
 
 -- ─── HUD POSITION ─────────────────────────────────────────────────────────────

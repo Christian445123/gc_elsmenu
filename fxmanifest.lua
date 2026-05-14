@@ -27,9 +27,11 @@ server_scripts {
 
 shared_scripts {
     'config.lua',
+    'vcf/models.lua',  -- Auto-Index aller VCF-Fahrzeuge (wird vor lights.lua geladen)
 }
 
 files {
     'ui/index.html',
     'vcf/*.xml',
+    'vcf/models.lua',
 }

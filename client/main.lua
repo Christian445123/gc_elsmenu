@@ -134,22 +134,33 @@ Citizen.CreateThread(function()
 end)
 
 -- ─── Pattern-Engine Thread ────────────────────────────────────────────────────
--- Laeuft mit Config.FlashDelay - steuert die Lichter
+-- Laeuft mit Config.FlashDelay - steuert NUR die Extras (physische Lichtmodelle).
+-- SetVehicleSiren und DrawLightWithRangeAndShadow laufen in eigenen Threads
+-- damit die Umgebungsbeleuchtung nicht mit dem Pattern flackert.
 
 Citizen.CreateThread(function()
     while true do
         if ELS.active and DoesEntityExist(ELS.vehicle) and ELS.stage > 0 then
             ApplyPattern(ELS.vehicle, ELS.stage, ELS.pattern, ELS.warning, ELS.frame)
             ELS.frame = ELS.frame + 1
-
-            if Config.EnvLight.enabled then
-                DrawVehicleCoronaLight(ELS.vehicle)
-            end
-
             Citizen.Wait(Config.FlashDelay)
         else
             Citizen.Wait(100)
         end
+    end
+end)
+
+-- ─── Env-Corona-Licht Thread (frame-rate) ─────────────────────────────────────
+-- DrawLightWithRangeAndShadow muss JEDEN FRAME gezeichnet werden (sonst flackert es).
+-- Trennung vom Pattern-Thread verhindert Umgebungs-Flackern beim Blinken.
+-- Config.EnvLight.syncWithPattern steuert ob Umgebung mit blinkt oder Dauerlicht ist.
+
+Citizen.CreateThread(function()
+    while true do
+        if ELS.active and DoesEntityExist(ELS.vehicle) and ELS.stage > 0 then
+            DrawVehicleCoronaLight(ELS.vehicle)
+        end
+        Citizen.Wait(0)   -- jeden Frame
     end
 end)
 
@@ -162,8 +173,9 @@ function SetELSStage(stage)
     ELS.stage = stage
 
     if stage == 0 then
-        -- Alles aus
+        -- Alles aus: Extras zuruecksetzen, Sirene aus
         LightsOff(ELS.vehicle)
+        SetVehicleSiren(ELS.vehicle, false)
         SetVehicleHasMutedSirens(ELS.vehicle, false)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
@@ -172,7 +184,10 @@ function SetELSStage(stage)
         end
 
     elseif stage == 1 then
-        -- Nur Lichter (Sound aus - wm-serversirens hat nichts zu tun)
+        -- Nur Lichter: native Sirene AN (steady, kein Flackern) aber Sound stumm
+        -- SetVehicleSiren aktiviert das native Siren-System fuer visuelle Effekte
+        -- Wir toggeln es NICHT per Frame → kein Umgebungs-Flackern
+        SetVehicleSiren(ELS.vehicle, true)
         SetVehicleHasMutedSirens(ELS.vehicle, true)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
@@ -181,9 +196,9 @@ function SetELSStage(stage)
         end
 
     elseif stage == 2 then
-        -- Lichter + Sirene
-        -- wm-serversirens uebernimmt den Sound serverseitig
-        SetVehicleHasMutedSirens(ELS.vehicle, true) -- nativer Sound bleibt stumm
+        -- Lichter + Sirene: native Sirene AN, Sound via wm-serversirens
+        SetVehicleSiren(ELS.vehicle, true)
+        SetVehicleHasMutedSirens(ELS.vehicle, true)  -- nativer Sound bleibt stumm
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
             TriggerServerEvent('gc_els:setSiren', netId, ELS.tone, true)
