@@ -21,6 +21,51 @@ ELS = {
     frame    = 0,     -- Pattern-Frame-Zaehler (wird vom Pattern-Thread hochgezaehlt)
 }
 
+-- ─── Sirenen-Audio (wm-serversirens, built-in) ───────────────────────────────
+-- wm-serversirens ist als Audio-DLC direkt in gc_elsmenu integriert (dlc_wmsirens/).
+-- PlaySoundFromEntity spielt den Ton direkt am Fahrzeug – kein Lua-Export nötig.
+
+local SIREN_AUDIO_REF = 'wmsiren'
+local SIREN_NAMES = {
+    [1] = 'siren_alpha',    -- Alpha / Wail
+    [2] = 'siren_bravo',    -- Bravo / Yelp
+    [3] = 'siren_charlie',  -- Charlie / Priority
+    [4] = 'siren_air_horn', -- Air Horn
+}
+
+local activeSirenSounds = {}  -- [netId] = GTA-SoundId
+
+local function StartSirenSound(vehicle, toneIdx)
+    if not DoesEntityExist(vehicle) then return end
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+
+    -- Vorherigen Sound stoppen (falls Ton gewechselt wird)
+    if activeSirenSounds[netId] then
+        StopSound(activeSirenSounds[netId])
+        ReleaseSoundId(activeSirenSounds[netId])
+        activeSirenSounds[netId] = nil
+    end
+
+    local soundName = SIREN_NAMES[toneIdx] or SIREN_NAMES[1]
+    local id = GetSoundId()
+    PlaySoundFromEntity(id, soundName, vehicle, SIREN_AUDIO_REF, false, 0)
+    activeSirenSounds[netId] = id
+
+    if Config.Debug then
+        print(string.format('[gc_els] Sirene: PlaySoundFromEntity("%s", "%s") netId=%d', soundName, SIREN_AUDIO_REF, netId))
+    end
+end
+
+local function StopSirenSound(vehicle)
+    if not DoesEntityExist(vehicle) then return end
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    if activeSirenSounds[netId] then
+        StopSound(activeSirenSounds[netId])
+        ReleaseSoundId(activeSirenSounds[netId])
+        activeSirenSounds[netId] = nil
+    end
+end
+
 -- ─── Interne Hilfsfunktionen ──────────────────────────────────────────────────
 
 -- Prueft ob ein Fahrzeug ELS-faehig ist (auto-detection)
@@ -60,8 +105,7 @@ local function DeactivateELS(vehicle)
     if Config.SirenOffOnExit then
         LightsOff(vehicle)
         SetVehicleSiren(vehicle, false)
-        SetVehicleHasMutedSirens(vehicle, false)
-
+        SetVehicleHasMutedSirens(vehicle, false)        StopSirenSound(vehicle)
         local netId = GetVehicleNetId(vehicle)
         if netId then
             TriggerServerEvent('gc_els:syncStage', netId, 0, 1, false)
@@ -178,29 +222,30 @@ function SetELSStage(stage)
         LightsOff(ELS.vehicle)
         SetVehicleSiren(ELS.vehicle, false)
         SetVehicleHasMutedSirens(ELS.vehicle, false)
+        StopSirenSound(ELS.vehicle)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
-            TriggerServerEvent('gc_els:syncStage', netId, 0, ELS.pattern, false)
+            TriggerServerEvent('gc_els:syncStage', netId, 0, ELS.pattern, false, 0)
         end
 
     elseif stage == 1 then
         -- Nur Lichter: native Sirene AN fuer visuelle Effekte, aber Sound stumm
         SetVehicleSiren(ELS.vehicle, true)
-        SetVehicleHasMutedSirens(ELS.vehicle, true)  -- kein Sound bei Stage 1
+        SetVehicleHasMutedSirens(ELS.vehicle, true)
+        StopSirenSound(ELS.vehicle)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
-            TriggerServerEvent('gc_els:syncStage', netId, 1, ELS.pattern, ELS.warning)
+            TriggerServerEvent('gc_els:syncStage', netId, 1, ELS.pattern, ELS.warning, 0)
         end
 
     elseif stage == 2 then
-        -- Lichter + Sirene: wm-serversirens ist ein Audio-Pack (kein Lua).
-        -- Die Sirene spielt automatisch wenn SetVehicleSiren=true und NICHT stumm ist.
-        -- SetVehicleHasMutedSirens(false) = Sound freigeben!
+        -- Lichter + Sirene: wm-serversirens Audio direkt abspielen
         SetVehicleSiren(ELS.vehicle, true)
-        SetVehicleHasMutedSirens(ELS.vehicle, false)  -- Sound EIN → wm-serversirens Audio spielt
+        SetVehicleHasMutedSirens(ELS.vehicle, true)  -- native GTA-Sirene stumm, wir spielen selbst
+        StartSirenSound(ELS.vehicle, ELS.tone)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
-            TriggerServerEvent('gc_els:syncStage', netId, 2, ELS.pattern, ELS.warning)
+            TriggerServerEvent('gc_els:syncStage', netId, 2, ELS.pattern, ELS.warning, ELS.tone)
         end
     end
 
@@ -240,11 +285,12 @@ function SetSirenTone(idx)
     if not Config.SirenTones[idx] then return end
     ELS.tone = idx
 
-    -- Wenn Stage 2 aktiv: Ton sofort an Server senden
-    if ELS.stage >= 2 then
+    -- Wenn Stage 2 aktiv: Ton sofort wechseln
+    if ELS.stage == 2 then
+        StartSirenSound(ELS.vehicle, ELS.tone)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
-            TriggerServerEvent('gc_els:setSiren', netId, ELS.tone, true)
+            TriggerServerEvent('gc_els:syncStage', netId, 2, ELS.pattern, ELS.warning, ELS.tone)
         end
     end
     UpdatePanel()
@@ -265,18 +311,23 @@ end
 
 -- Licht-Stage anderer Spieler empfangen und anzeigen
 RegisterNetEvent('gc_els:receiveStage')
-AddEventHandler('gc_els:receiveStage', function(netId, stage, pattern, warning)
+AddEventHandler('gc_els:receiveStage', function(netId, stage, pattern, warning, tone)
     local vehicle = NetworkGetEntityFromNetworkId(netId)
     if not DoesEntityExist(vehicle) then return end
     if vehicle == ELS.vehicle then return end -- Eigenes Fahrzeug ignorieren
 
-    -- Vereinfachte Remote-Darstellung: Siren an/aus
     if stage == 0 then
         SetVehicleSiren(vehicle, false)
-    else
+        StopSirenSound(vehicle)
+    elseif stage == 1 then
         SetVehicleSiren(vehicle, true)
-        -- Remote Fahrzeuge bekommen ihren eigenen nativen Sound (falls kein wm-serversirens)
-        SetVehicleHasMutedSirens(vehicle, stage == 1)
+        SetVehicleHasMutedSirens(vehicle, true)
+        StopSirenSound(vehicle)
+    elseif stage == 2 then
+        SetVehicleSiren(vehicle, true)
+        SetVehicleHasMutedSirens(vehicle, true)
+        -- Siren-Audio direkt am remote Fahrzeug abspielen (so hört jeder Spieler es)
+        StartSirenSound(vehicle, tone or 1)
     end
 end)
 

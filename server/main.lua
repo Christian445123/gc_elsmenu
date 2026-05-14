@@ -248,19 +248,19 @@ end)
 
 -- Client -> Server: Licht-Stage synchronisieren
 RegisterNetEvent('gc_els:syncStage')
-AddEventHandler('gc_els:syncStage', function(netId, stage, pattern, warning)
+AddEventHandler('gc_els:syncStage', function(netId, stage, pattern, warning, tone)
     local src = source
 
     -- Validierung
     if not ValidateDriver(src, netId) then return end
     if stage < 0 or stage > 2 then return end
 
-    -- An alle anderen Clients senden (nicht zurueck an den Sender)
-    TriggerClientEvent('gc_els:receiveStage', -1, netId, stage, pattern, warning)
+    -- An alle Clients senden (inkl. Sender – damit remote-Clients den Sound spielen)
+    TriggerClientEvent('gc_els:receiveStage', -1, netId, stage, pattern, warning, tone or 0)
 
     if Config.Debug then
-        print(string.format('[gc_els] Stage | NetID: %d | Stage: %d | Muster: %d | Warnung: %s',
-            netId, stage, pattern, tostring(warning)))
+        print(string.format('[gc_els] Stage | NetID: %d | Stage: %d | Muster: %d | Warnung: %s | Ton: %d',
+            netId, stage, pattern, tostring(warning), tone or 0))
     end
 end)
 
@@ -268,23 +268,13 @@ end)
 
 AddEventHandler('onResourceStop', function(resourceName)
     if resourceName ~= GetCurrentResourceName() then return end
-
-    -- Alle aktiven Sirenen stoppen wenn Resource gestoppt wird
-    if Config.WMSirens.enabled and GetResourceState(Config.WMSirens.resource) == 'started' then
-        local ok = pcall(function()
-            -- wm-serversirens reset (falls Export vorhanden)
-            exports[Config.WMSirens.resource]:StopAll()
-        end)
-        -- Kein Fehler-Log noetig - Stop-All ist optional
-    end
-
+    -- Clients werden über den Resource-Stop informiert (Sirenen stoppen sich clientseitig)
     print('[gc_els] Resource gestoppt.')
 end)
 
 AddEventHandler('onResourceStart', function(resourceName)
     if resourceName == GetCurrentResourceName() then
         print('[gc_els] Server gestartet.')
-        print(string.format('[gc_els] wm-serversirens: %s',
-            Config.WMSirens.enabled and 'aktiviert' or 'deaktiviert'))
+        print('[gc_els] wm-serversirens: integriert (dlc_wmsirens/ Audio-Pack built-in)')
     end
 end)
