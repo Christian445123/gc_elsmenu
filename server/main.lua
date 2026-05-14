@@ -21,7 +21,7 @@ local function stopResourceWithError(reason)
     print('^1  ##  LIZENZ-FEHLER: ' .. tostring(reason))
     print('^1  ##  Die Resource wird gestoppt.')
     print('^1  ################################################################^7')
-    ExecuteCommand('stop ' .. GetCurrentResourceName())
+    StopResource(GetCurrentResourceName())
 end
 
 Citizen.CreateThread(function()
