@@ -59,11 +59,12 @@ local function DeactivateELS(vehicle)
 
     if Config.SirenOffOnExit then
         LightsOff(vehicle)
+        SetVehicleSiren(vehicle, false)
         SetVehicleHasMutedSirens(vehicle, false)
 
         local netId = GetVehicleNetId(vehicle)
         if netId then
-            TriggerServerEvent('gc_els:setSiren', netId, 0, false)
+            TriggerServerEvent('gc_els:syncStage', netId, 0, 1, false)
         end
     end
 
@@ -87,7 +88,7 @@ local function ActivateELS(vehicle)
     -- Extras automatisch scannen und gruppieren
     local count = ScanExtras(vehicle)
 
-    -- Nativen Sirenen-Sound stumm schalten (wm-serversirens uebernimmt den Sound)
+    -- Sound stumm beim Einsteigen (Stage 0 = kein Ton)
     SetVehicleHasMutedSirens(vehicle, true)
 
     -- NUI-Panel oeffnen
@@ -173,43 +174,32 @@ function SetELSStage(stage)
     ELS.stage = stage
 
     if stage == 0 then
-        -- Alles aus: Extras zuruecksetzen, Sirene aus
+        -- Alles aus: Extras, Sirene und Sound aus
         LightsOff(ELS.vehicle)
         SetVehicleSiren(ELS.vehicle, false)
         SetVehicleHasMutedSirens(ELS.vehicle, false)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
-            -- wm-serversirens client-seitig stoppen
-            if Config.WMSirens.enabled and GetResourceState(Config.WMSirens.resource) == 'started' then
-                pcall(function() exports[Config.WMSirens.resource]:SetVehicleSiren(netId, false) end)
-            end
-            TriggerServerEvent('gc_els:setSiren', netId, 0, false)
             TriggerServerEvent('gc_els:syncStage', netId, 0, ELS.pattern, false)
         end
 
     elseif stage == 1 then
-        -- Nur Lichter: native Sirene AN (steady, kein Flackern) aber Sound stumm
-        -- SetVehicleSiren aktiviert das native Siren-System fuer visuelle Effekte
-        -- Wir toggeln es NICHT per Frame → kein Umgebungs-Flackern
+        -- Nur Lichter: native Sirene AN fuer visuelle Effekte, aber Sound stumm
         SetVehicleSiren(ELS.vehicle, true)
-        SetVehicleHasMutedSirens(ELS.vehicle, true)
+        SetVehicleHasMutedSirens(ELS.vehicle, true)  -- kein Sound bei Stage 1
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
-            TriggerServerEvent('gc_els:setSiren', netId, ELS.tone, false)
             TriggerServerEvent('gc_els:syncStage', netId, 1, ELS.pattern, ELS.warning)
         end
 
     elseif stage == 2 then
-        -- Lichter + Sirene: native Sirene AN, Sound via wm-serversirens
+        -- Lichter + Sirene: wm-serversirens ist ein Audio-Pack (kein Lua).
+        -- Die Sirene spielt automatisch wenn SetVehicleSiren=true und NICHT stumm ist.
+        -- SetVehicleHasMutedSirens(false) = Sound freigeben!
         SetVehicleSiren(ELS.vehicle, true)
-        SetVehicleHasMutedSirens(ELS.vehicle, true)  -- nativer Sound bleibt stumm
+        SetVehicleHasMutedSirens(ELS.vehicle, false)  -- Sound EIN → wm-serversirens Audio spielt
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
-            -- wm-serversirens direkt client-seitig triggern (sofortiger Effekt lokal)
-            if Config.WMSirens.enabled and GetResourceState(Config.WMSirens.resource) == 'started' then
-                pcall(function() exports[Config.WMSirens.resource]:SetVehicleSiren(netId, true) end)
-            end
-            TriggerServerEvent('gc_els:setSiren', netId, ELS.tone, true)
             TriggerServerEvent('gc_els:syncStage', netId, 2, ELS.pattern, ELS.warning)
         end
     end
@@ -267,13 +257,8 @@ function ManualHorn(active)
     if manualHornActive == active then return end
     manualHornActive = active
 
-    local netId = GetVehicleNetId(ELS.vehicle)
-    if netId then
-        if Config.WMSirens.enabled and GetResourceState(Config.WMSirens.resource) == 'started' then
-            pcall(function() exports[Config.WMSirens.resource]:SetVehicleSiren(netId, active) end)
-        end
-        TriggerServerEvent('gc_els:setSiren', netId, ELS.tone, active)
-    end
+    -- Nur Siren-Mute toggling noetig (kein Export, wm-serversirens ist Audio-Pack)
+    SetVehicleHasMutedSirens(ELS.vehicle, not active)
 end
 
 -- ─── Netzwerk-Events (von Server) ─────────────────────────────────────────────
