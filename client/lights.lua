@@ -1,21 +1,82 @@
 --[[
     gc_els | client/lights.lua
-    Licht-Pattern-Engine und automatische Extras-Erkennung.
+    Licht-Pattern-Engine mit XML-Fahrzeugkonfiguration und Auto-Detection-Fallback.
 
-    AUTO-DETECTION PRINZIP:
-    - Das Skript scannt alle Extras (1-20) des Fahrzeugs
-    - Gefundene Extras werden automatisch in Gruppe A (links/vorne) und
-      Gruppe B (rechts/hinten) aufgeteilt
+    XML-KONFIGURATION (VCF):
+    - Fahrzeugeigene Configs in vcf/<modellname>.xml
+    - Definiert exakt welche Extras zu Gruppe A (links/vorne) und B (rechts/hinten) gehoeren
+    - Config.VCFModels in config.lua listet alle Modelle mit XML-Datei auf
+    - Fallback auf Auto-Detection wenn kein XML fuer das Fahrzeug vorhanden
+
+    AUTO-DETECTION FALLBACK:
+    - Scannt alle Extras (1-20) des Fahrzeugs
+    - Teilt sie gleichmaessig in Gruppe A und B auf
     - GTA's internes Sirenen-System wird fuer die Corona-Lichter genutzt
-      (Position und Farbe kommen aus dem Fahrzeugmodell selbst - kein XML!)
-    - Rapid-Toggle von SetVehicleSiren erzeugt das Blinklichter-Muster
 --]]
+
+-- ─── VCF Cache ─────────────────────────────────────────────────────────────────
+
+local vcfCache = {}   -- [modelHash] = { modelName, groupA = {...}, groupB = {...} }
+
+-- ─── XML Parser ───────────────────────────────────────────────────────────────
+
+-- Parst komma- oder leerzeichen-getrennte Zahlen aus einem XML-Attributwert
+local function ParseExtras(str)
+    local result = {}
+    if not str then return result end
+    for n in str:gmatch('%d+') do
+        result[#result + 1] = tonumber(n)
+    end
+    return result
+end
+
+-- Parst den Inhalt einer VCF-XML-Datei, gibt Config-Table oder nil zurueck
+local function ParseVehicleXML(content)
+    if not content then return nil end
+
+    local modelName = content:match('<modelName%s+value="([^"]+)"')
+    if not modelName then return nil end
+
+    local gA = ParseExtras(content:match('<groupA%s+extras="([^"]+)"'))
+    local gB = ParseExtras(content:match('<groupB%s+extras="([^"]+)"'))
+
+    if #gA == 0 and #gB == 0 then return nil end
+
+    return { modelName = modelName, groupA = gA, groupB = gB }
+end
+
+-- Laedt alle VCF-Configs beim Ressourcenstart (aus Config.VCFModels)
+local function LoadAllVCFConfigs()
+    local resName = GetCurrentResourceName()
+    for _, modelName in ipairs(Config.VCFModels or {}) do
+        local path    = 'vcf/' .. modelName .. '.xml'
+        local content = LoadResourceFile(resName, path)
+        if content then
+            local cfg = ParseVehicleXML(content)
+            if cfg then
+                vcfCache[GetHashKey(modelName)] = cfg
+                if Config.Debug then
+                    print(string.format('[gc_els] VCF geladen: %s | A: %d Extras | B: %d Extras',
+                        modelName, #cfg.groupA, #cfg.groupB))
+                end
+            else
+                print('[gc_els] VCF Parse-Fehler: ' .. path)
+            end
+        else
+            print('[gc_els] VCF nicht gefunden: ' .. path)
+        end
+    end
+end
+
+Citizen.CreateThread(function()
+    LoadAllVCFConfigs()
+end)
 
 -- ─── Extras State ─────────────────────────────────────────────────────────────
 
-local extrasA    = {}   -- Gruppe A (erste Haelfte der gefundenen Extras)
-local extrasB    = {}   -- Gruppe B (zweite Haelfte der gefundenen Extras)
-local allExtras  = {}   -- Alle gefundenen Extras
+local extrasA    = {}   -- Gruppe A (aus XML oder Auto-Detection)
+local extrasB    = {}   -- Gruppe B (aus XML oder Auto-Detection)
+local allExtras  = {}   -- Alle aktiven Extras des aktuellen Fahrzeugs
 
 -- Gibt Anzahl der erkannten Extras zurueck (extern sichtbar)
 function GetDetectedExtrasCount()
@@ -24,10 +85,6 @@ end
 
 -- ─── Extra-Scanning ───────────────────────────────────────────────────────────
 
--- Scannt alle moeglichen Extras (1-20) und teilt sie in A/B auf.
--- Extras auf Einsatzfahrzeugen sind typischerweise Lichtgruppen:
---   z.B. Extra 1-3 = vorne links, Extra 4-6 = vorne rechts, usw.
--- Durch automatisches Aufteilen wird ein sinnvoller Wechselblitz erzeugt.
 function ScanExtras(vehicle)
     extrasA   = {}
     extrasB   = {}
@@ -35,9 +92,36 @@ function ScanExtras(vehicle)
 
     if not DoesEntityExist(vehicle) then return 0 end
 
+    local modelHash = GetEntityModel(vehicle)
+
+    -- ── XML-Config vorhanden → Extras aus VCF laden ────────────────────────────
+    if vcfCache[modelHash] then
+        local cfg = vcfCache[modelHash]
+
+        for _, extra in ipairs(cfg.groupA) do
+            if DoesExtraExist(vehicle, extra) then
+                extrasA[#extrasA + 1]   = extra
+                allExtras[#allExtras + 1] = extra
+            end
+        end
+        for _, extra in ipairs(cfg.groupB) do
+            if DoesExtraExist(vehicle, extra) then
+                extrasB[#extrasB + 1]   = extra
+                allExtras[#allExtras + 1] = extra
+            end
+        end
+
+        if Config.Debug then
+            print(string.format('[gc_els] XML-Config | %s | A: %d | B: %d',
+                cfg.modelName, #extrasA, #extrasB))
+        end
+        return #allExtras
+    end
+
+    -- ── Fallback: Auto-Detection ───────────────────────────────────────────────
     for i = 1, 20 do
         if DoesExtraExist(vehicle, i) then
-            table.insert(allExtras, i)
+            allExtras[#allExtras + 1] = i
         end
     end
 
@@ -46,14 +130,14 @@ function ScanExtras(vehicle)
 
     for i, extra in ipairs(allExtras) do
         if i <= half then
-            table.insert(extrasA, extra)
+            extrasA[#extrasA + 1] = extra
         else
-            table.insert(extrasB, extra)
+            extrasB[#extrasB + 1] = extra
         end
     end
 
     if Config.Debug then
-        print(string.format('[gc_els] Extras gesamt: %d | Gruppe A: %d | Gruppe B: %d',
+        print(string.format('[gc_els] Auto-Detection | Gesamt: %d | A: %d | B: %d',
             total, #extrasA, #extrasB))
     end
 

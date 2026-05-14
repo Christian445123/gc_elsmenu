@@ -31,4 +31,5 @@ shared_scripts {
 
 files {
     'ui/index.html',
+    'vcf/*.xml',
 }

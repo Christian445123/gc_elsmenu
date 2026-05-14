@@ -31,6 +31,20 @@ Config.AdditionalModels = {
     -- 'fbi2',
 }
 
+-- ─── VCF-FAHRZEUGKONFIGURATION ────────────────────────────────────────────────
+-- Fahrzeugmodelle mit eigener XML-Konfigurationsdatei (vcf/<modellname>.xml).
+-- Der interne GTA-Modellname (z.B. 'police') muss mit dem Dateinamen uebereinstimmen.
+-- Fahrzeuge ohne Eintrag hier werden automatisch erkannt (Auto-Detection).
+Config.VCFModels = {
+    -- 'police',
+    -- 'police2',
+    -- 'police3',
+    -- 'policeb',
+    -- 'ambulance',
+    -- 'firetruk',
+    -- 'lguard',
+}
+
 -- ─── WM-SERVERSIRENS ──────────────────────────────────────────────────────────
 Config.WMSirens = {
     enabled  = true,              -- wm-serversirens Unterstuetzung aktivieren
