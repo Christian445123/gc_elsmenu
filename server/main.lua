@@ -119,69 +119,54 @@ end)
 -- ─── wm-serversirens Hilfsfunktion ────────────────────────────────────────────
 
 -- Sendet den Sirenen-Befehl an wm-serversirens.
--- Probiert mehrere API-Signaturen der verschiedenen wm-serversirens Versionen.
--- netId    = Netzwerk-ID des Fahrzeugs (bevorzugt, da die meisten Versionen dies erwarten)
--- vehicle  = Server-seitiger Entity-Handle (Fallback fuer aeltere Versionen)
--- toneIndex = Ton-Index 1-4 (0 = aus)
--- active   = boolean
+-- Standard-API: SetVehicleSiren(netId, bool) – von den meisten Versionen unterstützt.
+-- Fallback: Entity-Handle statt netId (ältere WolfKnight-Versionen).
+-- netId   = Netzwerk-ID des Fahrzeugs
+-- vehicle = Server-seitiger Entity-Handle (Fallback)
+-- active  = boolean
 local function SetWMSiren(netId, vehicle, toneIndex, active)
     if not Config.WMSirens.enabled then return end
     local res = Config.WMSirens.resource
     if GetResourceState(res) ~= 'started' then
+        print(string.format('[gc_els] ⚠ wm-serversirens nicht gestartet! Resource: "%s"', res))
+        return
+    end
+
+    -- Versuch 1: Standard-API mit netId (häufigste Version)
+    local ok, err = pcall(function()
+        exports[res]:SetVehicleSiren(netId, active)
+    end)
+    if ok then
         if Config.Debug then
-            print('[gc_els] wm-serversirens nicht gestartet, ueberspringe.')
+            print(string.format('[gc_els] wm-serversirens OK: SetVehicleSiren(netId=%d, %s)', netId, tostring(active)))
         end
         return
     end
 
-    -- Versuche 1: SetVehicleSiren(netId, state, tone) – moderne Versionen mit Ton-Control
-    local ok = pcall(function()
-        if active and toneIndex > 0 then
-            exports[res]:SetVehicleSiren(netId, true, toneIndex)
-        else
-            exports[res]:SetVehicleSiren(netId, false, 0)
-        end
-    end)
-    if ok then return end
-
-    -- Versuche 2: SetSirenTone(netId, tone) – alternativ mit netId
-    ok = pcall(function()
-        if active and toneIndex > 0 then
-            exports[res]:SetSirenTone(netId, toneIndex)
-        else
-            exports[res]:SetSirenTone(netId, 0)
-        end
-    end)
-    if ok then return end
-
-    -- Versuche 3: SetVehicleSiren(vehicle, state) – WolfKnight-Original mit Entity-Handle
+    -- Versuch 2: Entity-Handle statt netId (ältere WolfKnight-Versionen)
     ok = pcall(function()
         exports[res]:SetVehicleSiren(vehicle, active)
     end)
-    if ok then return end
-
-    -- Versuche 4: SetSirenTone(vehicle, tone) – aeltere Versionen mit Entity-Handle
-    ok = pcall(function()
-        if active and toneIndex > 0 then
-            exports[res]:SetSirenTone(vehicle, toneIndex)
-        else
-            exports[res]:SetSirenTone(vehicle, 0)
+    if ok then
+        if Config.Debug then
+            print(string.format('[gc_els] wm-serversirens OK: SetVehicleSiren(entity, %s) [Fallback]', tostring(active)))
         end
-    end)
-    if ok then return end
+        return
+    end
 
-    -- Fallback: Client-Event (alle Clients informieren, die den Sound abspielen koennen)
+    -- Letztmöglicher Fallback: Client-Event
     pcall(function()
-        if active and toneIndex > 0 then
+        if active then
             TriggerClientEvent(res .. ':playServerSiren', -1, netId, toneIndex)
         else
             TriggerClientEvent(res .. ':stopServerSiren', -1, netId)
         end
     end)
 
-    if Config.Debug then
-        print('[gc_els] wm-serversirens: alle API-Versuche abgeschlossen (kein Fehler = OK)')
-    end
+    -- Immer loggen wenn alle Versuche fehlgeschlagen (nicht nur im Debug)
+    print(string.format('[gc_els] ⚠ wm-serversirens: alle Server-Methoden fehlgeschlagen (letzter Fehler: %s)\n' ..
+        '         → Client-seitige Aufrufe laufen parallel (main.lua). Falls keine Sirene: Config.WMSirens.resource pruefen.',
+        tostring(err)))
 end
 
 -- ─── Validierung ──────────────────────────────────────────────────────────────

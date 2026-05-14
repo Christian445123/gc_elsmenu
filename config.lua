@@ -135,9 +135,9 @@ Config.EnvLight = {
     enabled         = true,
 
     -- SYNCHRONISATION:
-    --   false (Standard) = Dauerlicht wenn ELS aktiv, kein Mitblinken → nur die Extras blinken
-    --   true             = Blinkt synchron mit dem Lichtmuster (Umgebung blinkt mit)
-    syncWithPattern = false,
+    --   false = Dauerlicht wenn ELS aktiv, kein Mitblinken → nur die Extras blinken
+    --   true  = Blinkt synchron mit dem Lichtmuster (Umgebung blinkt mit)
+    syncWithPattern = true,
 
     -- REICHWEITE & HELLIGKEIT:
     range           = 14.0,   -- Wie weit das Umgebungslicht reicht (in Metern)
@@ -148,9 +148,11 @@ Config.EnvLight = {
     sideOffset      = 0.8,    -- Seitlicher Abstand vom Fahrzeug in Metern
     heightOffset    = 1.0,    -- Hoehenversatz ueber dem Fahrzeugboden in Metern
 
-    -- FARBEN:
+    -- FARBEN (Österreich: NUR BLAU – kein Rot!):
+    -- Wenn eine VCF-XML vorhanden ist, werden die Farben daraus gelesen (Color="blue" etc.)
+    -- Diese Config-Werte dienen als Fallback fuer Fahrzeuge ohne XML.
     color           = { r = 0,   g = 20,  b = 255 },  -- Linke Seite  (Blau)
-    altColor        = { r = 255, g = 0,   b = 0   },  -- Rechte Seite (Rot)
+    altColor        = { r = 0,   g = 20,  b = 255 },  -- Rechte Seite (Blau – Österreich!)
 }
 
 -- ─── HUD POSITION ─────────────────────────────────────────────────────────────

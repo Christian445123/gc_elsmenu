@@ -23,11 +23,23 @@
 
 -- ─── VCF Cache ─────────────────────────────────────────────────────────────────
 
-local vcfCache = {}   -- [modelHash] = { modelName, groupA = {...}, groupB = {...} }
+local vcfCache = {}   -- [modelHash] = { modelName, groupA = {...}, groupB = {...}, colorA, colorB }
+
+-- Farb-Mapping: XML-Farbname → RGB  (österr. Standard = blau)
+local colorMap = {
+    blue   = { r = 0,   g = 20,  b = 255 },
+    red    = { r = 255, g = 0,   b = 0   },
+    green  = { r = 0,   g = 200, b = 0   },
+    white  = { r = 255, g = 255, b = 255 },
+    amber  = { r = 255, g = 140, b = 0   },
+    yellow = { r = 255, g = 220, b = 0   },
+}
 
 -- ─── Aktueller Lichtzustand (für Env-Corona Thread in main.lua) ───────────────
 
 local lightState = { a = false, b = false }  -- Wird von ApplyPattern gesetzt
+local envColorA  = nil  -- Aktive Env-Farbe Gruppe A (aus XML, nil = Config-Fallback)
+local envColorB  = nil  -- Aktive Env-Farbe Gruppe B (aus XML, nil = Config-Fallback)
 
 function GetLightState()
     return lightState
@@ -50,22 +62,28 @@ end
 --   OffsetX < 0  → Gruppe A (links)
 --   OffsetX > 0  → Gruppe B (rechts)
 --   OffsetX = 0 oder fehlt → Gruppe A (Mitte/Fallback)
+-- Liest auch Color="..." und ermittelt die dominante Farbe je Gruppe.
 local function ParseELSVCFFormat(content, modelName)
     local gA = {}
     local gB = {}
     local parsed = 0
+    local colorCountA = {}
+    local colorCountB = {}
 
     for line in content:gmatch('[^\r\n]+') do
         local extraNum = line:match('<Extra(%d+)%s')
         if extraNum and line:find('IsElsControlled="true"') then
             local num     = tonumber(extraNum)
             local offsetX = tonumber(line:match('OffsetX="([^"]+)"'))
+            local color   = line:match('Color="([^"]+)"')
             if num then
                 parsed = parsed + 1
                 if offsetX and offsetX > 0 then
                     gB[#gB + 1] = num
+                    if color then colorCountB[color] = (colorCountB[color] or 0) + 1 end
                 else
                     gA[#gA + 1] = num
+                    if color then colorCountA[color] = (colorCountA[color] or 0) + 1 end
                 end
             end
         end
@@ -78,7 +96,21 @@ local function ParseELSVCFFormat(content, modelName)
         return nil
     end
 
-    return { modelName = modelName, groupA = gA, groupB = gB, parsedLines = parsed }
+    -- Dominante Farbe pro Gruppe (die Farbe mit den meisten Extras gewinnt)
+    local function dominant(counts)
+        local best, bestN = nil, 0
+        for c, n in pairs(counts) do if n > bestN then best = c; bestN = n end end
+        return best
+    end
+
+    return {
+        modelName   = modelName,
+        groupA      = gA,
+        groupB      = gB,
+        colorA      = dominant(colorCountA),  -- z.B. "blue"
+        colorB      = dominant(colorCountB),
+        parsedLines = parsed,
+    }
 end
 
 -- Parst eine VCF-XML-Datei.
@@ -182,6 +214,8 @@ function ScanExtras(vehicle)
     allExtras       = {}
     lightState.a    = false
     lightState.b    = false
+    envColorA       = nil
+    envColorB       = nil
     currentModelName = 'unbekannt'
 
     if not DoesEntityExist(vehicle) then return 0 end
@@ -197,6 +231,10 @@ function ScanExtras(vehicle)
     if vcfCache[modelHash] then
         local cfg = vcfCache[modelHash]
         currentModelName = cfg.modelName
+
+        -- Env-Farben aus XML übernehmen (österr. Standard = blau)
+        envColorA = cfg.colorA and colorMap[cfg.colorA] or nil
+        envColorB = cfg.colorB and colorMap[cfg.colorB] or nil
 
         local missingA = {}
         local missingB = {}
@@ -222,20 +260,37 @@ function ScanExtras(vehicle)
         local hasMissing = #missingA > 0 or #missingB > 0
 
         if #allExtras == 0 then
-            -- Kritisch: alle in der XML eingetragenen Extras fehlen am Fahrzeug-Modell
+            -- Kritisch: alle XML-Extras fehlen am Modell → Auto-Fix via Scan 1-20
             print(string.format(
-                '[gc_els] ✘ %s (%s): Kein einziges Extra am Fahrzeug gefunden!\n' ..
-                '         XML sagt A:[%s] B:[%s] – aber diese Extras existieren am Modell nicht.\n' ..
-                '         → Blaulicht-Blinken nicht moeglich. Bitte XML pruefen.',
+                '[gc_els] ✘ %s (%s): Kein XML-Extra am Modell! XML: A:[%s] B:[%s]\n' ..
+                '         → Auto-Fix: scanne Extras 1-20 am Fahrzeug …',
                 cfg.modelName, modelLabel,
                 table.concat(cfg.groupA, ','),
                 table.concat(cfg.groupB, ',')))
+
+            local found = {}
+            for i = 1, 20 do
+                if DoesExtraExist(vehicle, i) then found[#found + 1] = i end
+            end
+            if #found > 0 then
+                local half = math.ceil(#found / 2)
+                for i, extra in ipairs(found) do
+                    allExtras[#allExtras + 1] = extra
+                    if i <= half then extrasA[#extrasA + 1] = extra
+                    else              extrasB[#extrasB + 1] = extra end
+                end
+                print(string.format(
+                    '[gc_els]   ✓ Auto-Fix OK: %d Extras | A:[%s] B:[%s]',
+                    #allExtras, table.concat(extrasA, ','), table.concat(extrasB, ',')))
+            else
+                print('[gc_els]   ✘ Auto-Fix: Auch kein Extra 1-20 vorhanden – Blinken nicht moeglich.')
+            end
         elseif hasMissing then
-            -- Teilweise fehlende Extras (aber es gibt noch funktionierende)
+            -- Teilweise fehlende Extras (funktionierende bleiben aktiv)
             print(string.format(
-                '[gc_els] ⚠ %s (%s): %d von %d XML-Extras fehlen am Fahrzeug.\n' ..
+                '[gc_els] ⚠ %s (%s): %d von %d XML-Extras fehlen.\n' ..
                 '         Fehlend A:[%s]  Fehlend B:[%s]\n' ..
-                '         Aktiv: A:[%s] B:[%s] (%d Lichter funktionieren)',
+                '         Aktiv: A:[%s] B:[%s] (%d Lichter OK)',
                 cfg.modelName, modelLabel,
                 #missingA + #missingB,
                 #cfg.groupA + #cfg.groupB,
@@ -246,10 +301,12 @@ function ScanExtras(vehicle)
                 #allExtras))
         elseif Config.Debug then
             print(string.format(
-                '[gc_els] ✓ %s: %d Lichter OK | A:[%s] | B:[%s]',
+                '[gc_els] ✓ %s: %d Lichter OK | A:[%s] | B:[%s] | Farbe A:%s B:%s',
                 cfg.modelName, #allExtras,
                 table.concat(extrasA, ','),
-                table.concat(extrasB, ',')))
+                table.concat(extrasB, ','),
+                cfg.colorA or 'config',
+                cfg.colorB or 'config'))
         end
 
         return #allExtras
@@ -409,11 +466,11 @@ function DrawVehicleCoronaLight(vehicle)
     local fall = cfg.falloff    or 3.5
 
     if showL then
-        local c = cfg.color
+        local c = envColorA or cfg.color  -- XML-Farbe wenn vorhanden, sonst Config-Fallback
         DrawLightWithRangeAndShadow(lx, ly, z, c.r, c.g, c.b, rng, bri, fall)
     end
     if showR then
-        local c = cfg.altColor
+        local c = envColorB or cfg.altColor  -- XML-Farbe wenn vorhanden, sonst Config-Fallback
         DrawLightWithRangeAndShadow(rx, ry, z, c.r, c.g, c.b, rng, bri, fall)
     end
 end

@@ -179,6 +179,10 @@ function SetELSStage(stage)
         SetVehicleHasMutedSirens(ELS.vehicle, false)
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
+            -- wm-serversirens client-seitig stoppen
+            if Config.WMSirens.enabled and GetResourceState(Config.WMSirens.resource) == 'started' then
+                pcall(function() exports[Config.WMSirens.resource]:SetVehicleSiren(netId, false) end)
+            end
             TriggerServerEvent('gc_els:setSiren', netId, 0, false)
             TriggerServerEvent('gc_els:syncStage', netId, 0, ELS.pattern, false)
         end
@@ -201,6 +205,10 @@ function SetELSStage(stage)
         SetVehicleHasMutedSirens(ELS.vehicle, true)  -- nativer Sound bleibt stumm
         local netId = GetVehicleNetId(ELS.vehicle)
         if netId then
+            -- wm-serversirens direkt client-seitig triggern (sofortiger Effekt lokal)
+            if Config.WMSirens.enabled and GetResourceState(Config.WMSirens.resource) == 'started' then
+                pcall(function() exports[Config.WMSirens.resource]:SetVehicleSiren(netId, true) end)
+            end
             TriggerServerEvent('gc_els:setSiren', netId, ELS.tone, true)
             TriggerServerEvent('gc_els:syncStage', netId, 2, ELS.pattern, ELS.warning)
         end
@@ -261,6 +269,9 @@ function ManualHorn(active)
 
     local netId = GetVehicleNetId(ELS.vehicle)
     if netId then
+        if Config.WMSirens.enabled and GetResourceState(Config.WMSirens.resource) == 'started' then
+            pcall(function() exports[Config.WMSirens.resource]:SetVehicleSiren(netId, active) end)
+        end
         TriggerServerEvent('gc_els:setSiren', netId, ELS.tone, active)
     end
 end
