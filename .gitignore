@@ -1,1 +1,2 @@
 server/server_secrets.lua
+vcf/*.xml
